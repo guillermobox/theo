@@ -1,0 +1,31 @@
+configuration:
+      valgrind: true
+      volatile: temporal.txt
+
+tests:
+    - name: BasicTest
+      run: echo
+      exit: 0
+
+    - name: TestWithSetup
+      setup: echo Hello World > temporal.txt
+      run: cat temporal.txt
+      output: Hello World
+
+    - name: ThisFailsBecauseOfSetup
+      setup: unknowncommand
+      run: echo
+      exit: 0
+
+    - name: ThisFailsBecauseOfRunOutput
+      setup: echo Hello > temporal.txt
+      run: cat temporal.txt
+      output: Goodbye
+
+    - name: ThisFailsBecauseOfReturn
+      run: echo
+      exit: 1
+
+    - name: HelloWorldFromC
+      run: ./helloworld
+      output: Hello World!
