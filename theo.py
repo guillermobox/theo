@@ -1,11 +1,14 @@
 #!/usr/bin/python2
-import yaml
-import subprocess
-import threading
-import tempfile
-import shutil
+import argparse
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
+import threading
+import yaml
+
+arguments = None
 
 def readlist(dict, key):
     if not key in dict:
@@ -15,7 +18,7 @@ def readlist(dict, key):
         ret = [ret]
     return ret
 
-class TestStatus:
+class Status:
     NOTRUN = 0
     RUNNING = 1
     PASS = 2
@@ -29,19 +32,29 @@ class FailureReason:
     RETURN = 4
 
 class Suite(object):
+    default_configuration = dict(
+        valgrind = False,
+        environment = [],
+        volatile = [],
+    )
+    '''A suite represents a set of tests.'''
     def __init__(self, path):
 
         with open(path, 'r') as testfile:
-            try:
-                suite = yaml.load(testfile)
-            except yaml.scanner.ScannerError as e:
-                raise Exception("Input file is not YAML, error at line %d"%(e.problem_mark.line,))
+            content = testfile.read()
 
-        self.name,_ = os.path.splitext(os.path.basename(path))
-
-        self.configuration = dict()
+        self.configuration = Suite.default_configuration.copy()
         self.tests = list()
 
+        self.fromYAML(content)
+        self.name,_ = os.path.splitext(os.path.basename(path))
+
+
+    def fromYAML(self, content):
+        try:
+            suite = yaml.load(content)
+        except yaml.scanner.ScannerError as e:
+            raise Exception("Input file is not YAML, error at line %d"%(e.problem_mark.line,))
         if 'configuration' in suite:
             self.parseConfiguration(suite['configuration'])
         if 'tests' in suite:
@@ -56,51 +69,63 @@ class Suite(object):
         for config in configlist:
             self.tests.append(Test(config, self))
 
-    def runTests(self):
+    def printHeader(self):
+        if arguments.output == 'nice':
+            print '\033[7m{0:39} {1:4} {2:4} {3:30}\033[0m'.format('Test name','Test','Valg','Message')
+        else:
+            print 'Running tests...'
 
-        print '\033[7m{0:39} {1:4} {2:4} {3:30}\033[0m'.format('Test name','Test','Valg','Message')
+    def printTest(self, test):
+        if arguments.output == 'nice':
+            print '{0:39}'.format(test.config['name']),
+
+            if test.statusTest == Status.PASS:
+                print "\033[32mPASS\033[0m",
+            elif test.statusTest == Status.ERROR:
+                print "\033[31mFAIL\033[0m",
+            elif test.statusTest == Status.NOTRUN:
+                print "----",
+
+            if test.statusValgrind == Status.PASS:
+                print "\033[32mPASS\033[0m",
+            elif test.statusValgrind == Status.ERROR:
+                print "\033[31mFAIL\033[0m",
+            elif test.statusValgrind == Status.NOTRUN:
+                print "----",
+
+            if test.hasFailed():
+                print test.abortmsg,
+
+            print
+
+    def printFooter(self):
+        if arguments.output == 'nice':
+            failed = [t for t in self.tests if t.hasFailed()]
+
+            if len(failed) == 0:
+                msg = 'All tests completed successfully'
+            else:
+                msg = 'Failed {0} tests of {1}'.format(len(failed), len(self.tests))
+            print '\033[7m{0:^80}\033[0m'.format(msg)
+
+            for test in failed:
+                print "{0}: {1}".format(test.config['name'], test.failureMessage())
+
+    def runTests(self):
+        '''This method runs the tests in the suite.'''
+        self.printHeader()
 
         for test in self.tests:
             self.setup()
             err = test.run()
-            self.show_test_results(test)
             self.setdown()
 
-        failed = [test for test in self.tests if test.abortmsg != None]
+            self.printTest(test)
 
-        if len(failed) == 0:
-            msg = 'All tests completed successfully'
-        else:
-            msg = 'Failed {0} tests of {1}'.format(len(failed), len(self.tests))
-
-        print '\033[7m{0:^80}\033[0m'.format(msg)
-
-        for test in failed:
-            print "{0}: {1}".format(test.name, test.showDiagnostics())
-
-    def show_test_results(self, test):
-        print '{0:39}'.format(test.name),
-
-        if test.statusTest == TestStatus.PASS:
-            print "\033[32mPASS\033[0m",
-        elif test.statusTest == TestStatus.ERROR:
-            print "\033[31mFAIL\033[0m",
-        elif test.statusTest == TestStatus.NOTRUN:
-            print "----",
-
-        if test.statusValgrind == TestStatus.PASS:
-            print "\033[32mPASS\033[0m",
-        elif test.statusValgrind == TestStatus.ERROR:
-            print "\033[31mFAIL\033[0m",
-        elif test.statusValgrind == TestStatus.NOTRUN:
-            print "----",
-
-        if test.abortmsg:
-            print test.abortmsg,
-
-        print
+        self.printFooter()
 
     def setup(self):
+        '''Prepare the nevironment to a given test.'''
         self.savedEnvironment = dict()
         for pair in self.configuration['environment']:
             key,_,value = pair.partition('=')
@@ -115,6 +140,7 @@ class Suite(object):
                 pass
 
     def setdown(self):
+        '''Clean the environment from a given test.'''
         for pair in self.configuration['environment']:
             key,_,value = pair.partition('=')
             if key in self.savedEnvironment:
@@ -129,48 +155,59 @@ class Suite(object):
                 pass
 
 class Test(object):
+    '''A test represents any command that the user wants to run and check its
+    output. It could have a setup command. Valgrind can be executed and the
+    result is checked.'''
+
     default_configuration = dict(
         input= None,
         output= None,
-        timeout= 10,
+        timeout= 600,
         exit = None,
         valgrind = False
     )
-    def __init__(self, config, suite):
 
+    def __init__(self, config, suite):
+        '''Initialize the test. Nothing is run here.'''
         self.config = Test.default_configuration.copy()
         self.config.update(config)
 
         self.suite = suite
-
-        self.name = config['name']
-        self.config['setup'] = readlist(config,'setup')
-
-        self.statusSetup = TestStatus.NOTRUN
-        self.statusTest = TestStatus.NOTRUN
-        self.statusValgrind = TestStatus.NOTRUN
+        self.statusSetup = Status.NOTRUN
+        self.statusTest = Status.NOTRUN
+        self.statusValgrind = Status.NOTRUN
 
         self.abortmsg = None
+        self.reason = None
+
+    def hasFailed(self):
+        '''Return true if the Test has failed.'''
+        return self.abortmsg != None
 
     def abort(self, msg, reason):
+        '''Abort the test with a message and reason.'''
         self.abortmsg = msg
         self.reason = reason
         return msg
 
     def setup(self):
-        self.statusSetup = TestStatus.RUNNING
-        for command in self.config['setup']:
+        '''Run the setup of the test.'''
+        self.statusSetup = Status.RUNNING
+        for command in readlist(self.config, 'setup'):
             if subprocess.call(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
-                self.statusSetup = TestStatus.ERROR
+                self.statusSetup = Status.ERROR
                 return self.abort("Setup failed", FailureReason.SETUP)
-        self.statusSetup = TestStatus.PASS
+        self.statusSetup = Status.PASS
 
     def run(self):
+        '''Run the full test procedure, includes setup and test.'''
         if self.setup():
             return FailureReason.SETUP
 
-        self.statusTest = TestStatus.RUNNING
-        self.process = subprocess.Popen("exec " + self.config['run'], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+        self.statusTest = Status.RUNNING
+        self.process = subprocess.Popen("exec " + self.config['run'],
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE)
 
         def target():
             (stdout, stderr) = self.process.communicate(self.config['input'])
@@ -183,18 +220,18 @@ class Test(object):
         if thread.is_alive():
             process.kill()
             thread.join()
-            self.statusTest = TestStatus.ERROR
+            self.statusTest = Status.ERROR
             return self.abort("Timeout of %d seconds"%(self.config['timeout'],), FailureReason.TIME)
 
         if self.config['output'] != None and str(self.config['output']).strip() != self.runResults[0].strip():
-            self.statusTest = TestStatus.ERROR
+            self.statusTest = Status.ERROR
             return self.abort("Wrong output", FailureReason.OUTPUT)
 
         if self.config['exit'] != None and self.config['exit'] != self.process.returncode:
-            self.statusTest = TestStatus.ERROR
+            self.statusTest = Status.ERROR
             return self.abort("Wrong return value", FailureReason.RETURN)
 
-        self.statusTest = TestStatus.PASS
+        self.statusTest = Status.PASS
 
         if self.suite.configuration['valgrind'] != True:
             return None
@@ -203,7 +240,7 @@ class Test(object):
 
         xmlfile = tempfile.NamedTemporaryFile()
 
-        self.statusValgrind = TestStatus.RUNNING
+        self.statusValgrind = Status.RUNNING
         valgrindstr="valgrind --error-exitcode=127 --xml-file="+xmlfile.name+" --xml=yes --leak-check=full";
         self.process = subprocess.Popen("exec " + valgrindstr + " " + self.config['run'], shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
 
@@ -218,21 +255,22 @@ class Test(object):
         if thread.is_alive():
             process.kill()
             thread.join()
-            self.statusValgrind = TestStatus.ERROR
+            self.statusValgrind = Status.ERROR
             return self.abort("Timeout of %d seconds"%(self.config['timeout'],), FailureReason.TIME)
 
         from lxml import etree
         tree = etree.parse(xmlfile)
         errors = tree.xpath('/valgrindoutput/error')
         if errors:
-            self.statusValgrind = TestStatus.ERROR
+            self.statusValgrind = Status.ERROR
             self.valgrind = len(errors)
-            shutil.copyfile(xmlfile.name, self.name + '.valgrind')
+            shutil.copyfile(xmlfile.name, self.config['name'] + '.valgrind')
         else:
-            self.statusValgrind = TestStatus.PASS
+            self.statusValgrind = Status.PASS
         xmlfile.close()
 
-    def showDiagnostics(self):
+    def failureMessage(self):
+        '''This is the short failure message for the user.'''
         if self.reason == FailureReason.OUTPUT:
             return "Expected output '{0}' but found '{1}'".format(str(self.config['output']).strip(), self.runResults[0].strip())
         elif self.reason == FailureReason.RETURN:
@@ -241,8 +279,21 @@ class Test(object):
             return "Setup failed"
 
 def main():
-    suite = Suite(sys.argv[1])
-    suite.runTests()
+    global arguments
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("theofile",
+            help="File(s) to search looking for tests",
+            nargs="+")
+    parser.add_argument("-o", "--output",
+            help=argparse.SUPPRESS,
+            default="nice")
+
+    arguments = parser.parse_args()
+
+    for file in arguments.theofile:
+        suite = Suite(file)
+        suite.runTests()
 
 if __name__ == '__main__':
     exit(main())

@@ -27,5 +27,6 @@ tests:
       exit: 1
 
     - name: HelloWorldFromC
+      setup: make helloworld
       run: ./helloworld
       output: Hello World!
