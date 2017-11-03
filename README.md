@@ -12,7 +12,8 @@ have memory leaks or similar.
 
 By running:
 
-    theo simple.yaml
+    cd examples
+    python ../theo.py simple.yaml
 
 Theo will load the yaml file, parse the tests, and run them. Reporting when
 any of the tests failed.
@@ -24,5 +25,6 @@ in the !theo line from the lines inbetween, and then create a suite for that
 file. See `standalone.c` in the examples folder to understand it better. You
 run it like with a yaml file:
 
-    theo standalone.c
+    cd examples
+    python ../theo.py standalone.c
 
