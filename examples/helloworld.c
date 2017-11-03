@@ -1,9 +1,3 @@
-/*
- * theo begin
- * run: ./helloworld
- * output: Hello World!
- * theo end
- */
 #include <stdio.h>
 #include <stdlib.h>
 
