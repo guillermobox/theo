@@ -31,6 +31,9 @@ class FailureReason:
     OUTPUT = 3
     RETURN = 4
 
+class ExceptionInvalidTheoFile(Exception):
+    pass
+
 class Suite(object):
     default_configuration = dict(
         valgrind = False,
@@ -48,31 +51,25 @@ class Suite(object):
         self.tests = list()
         self.path = path
 
-        try:
-            self.fromYAML(content)
-        except:
-            try:
-                content = self.search_theo(content)
-                self.fromYAML(content)
-            except Exception as e:
-                raise e
-                raise Exception('This is not a theo file, or does not contain theo data')
+        content = self.search_theo(content)
+
+        self.fromYAML(content)
 
         self.statusSetup = Status.NOTRUN
         self.statusSetdown = Status.NOTRUN
 
     def fromYAML(self, content):
         try:
-            suite = yaml.load(''.join(content))
-        except yaml.scanner.ScannerError as e:
-            raise Exception("Input file is not YAML, error at line %d"%(e.problem_mark.line,))
+            suite = yaml.load(content)
+        except:
+            raise ExceptionInvalidTheoFile()
         if 'configuration' in suite:
             self.parseConfiguration(suite['configuration'])
         if 'tests' in suite:
             self.parseTests(suite['tests'])
 
     def search_theo(self, data):
-
+        '''Try to find a !theo block. If not found, get all the file.'''
         start = None
         end = None
 
@@ -99,8 +96,8 @@ class Suite(object):
                 contents += cropped
 
             return contents
-
-        raise Exception('Theo not found in this file')
+        else:
+            return ''.join(data)
 
     def parseConfiguration(self, config):
         config['environment'] = readlist(config, 'environment')
@@ -373,8 +370,8 @@ def main():
         try:
             suite = Suite(file)
             suite.runTests()
-        except:
-            pass
+        except ExceptionInvalidTheoFile:
+            print file, 'is an invalid theo file, skipping'
 
 if __name__ == '__main__':
     exit(main())
