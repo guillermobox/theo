@@ -2,6 +2,8 @@
 import argparse
 
 from suite import Suite, ExceptionInvalidTheoFile
+from reporter import Reporter, NiceReporter, EventsReporter, Event, Dispatcher
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -14,12 +16,19 @@ def main():
 
     arguments = parser.parse_args()
 
+    reporter = NiceReporter()
+    dispatcher = Dispatcher()
+    reporter.start()
+
     for file in arguments.theofile:
         try:
             suite = Suite(file, arguments)
             suite.runTests()
         except ExceptionInvalidTheoFile:
-            print file, 'is an invalid theo file, skipping'
+            pass
+
+    dispatcher.put((Event.Exit, None))
+    reporter.join()
 
 if __name__ == '__main__':
     exit(main())
