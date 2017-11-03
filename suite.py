@@ -95,9 +95,7 @@ class Suite(object):
     def runTests(self):
         '''This method runs the tests in the suite.'''
 
-        dispatcher.put((Event.SuiteStart, self))
         self.setup_suite()
-        dispatcher.put((Event.SuiteSetupFinished, self))
 
         if self.statusSetup != Status.ERROR:
             for test in self.tests:
@@ -124,6 +122,7 @@ class Suite(object):
 
     def setup_suite(self):
         '''Run the setup commands from the suite.'''
+        dispatcher.put((Event.SuiteStart, self))
         if self.configuration['setup']:
             self.statusSetup = Status.RUNNING
             for command in readlist(self.configuration, 'setup'):
@@ -131,6 +130,7 @@ class Suite(object):
                     self.statusSetup = Status.ERROR
                     return
             self.statusSetup = Status.PASS
+        dispatcher.put((Event.SuiteSetupFinished, self))
 
     def setdown(self):
         '''Clean the environment from a given test.'''
