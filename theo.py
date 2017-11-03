@@ -46,9 +46,11 @@ class Suite(object):
         self.configuration = Suite.default_configuration.copy()
         self.tests = list()
 
-        self.fromYAML(content)
-        self.name,_ = os.path.splitext(os.path.basename(path))
-
+        try:
+            self.fromYAML(content)
+        except:
+            content = self.searchtheo(path)
+            self.fromYAML(content)
 
     def fromYAML(self, content):
         try:
@@ -59,6 +61,35 @@ class Suite(object):
             self.parseConfiguration(suite['configuration'])
         if 'tests' in suite:
             self.parseTests(suite['tests'])
+
+    def searchtheo(self, filename):
+
+        data = open(filename).readlines()
+        start = None
+        end = None
+
+        for lineno, line in enumerate(data):
+            if '!theo' in line:
+                if start == None:
+                    start = lineno
+                else:
+                    end = lineno
+
+        if start != None and end != None:
+            i = data[start].index('!theo')
+            prev = data[start][0:i]
+            prevlen = len(prev)
+            prev = prev.rstrip()
+
+            contents = ''
+
+            for line in data[start+1:end]:
+                if not line.startswith(prev):
+                    print 'Error!'
+                    return
+                cropped = line[prevlen:] or '\n'
+                contents += cropped
+            return contents
 
     def parseConfiguration(self, config):
         config['environment'] = readlist(config, 'environment')
