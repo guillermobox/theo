@@ -17,3 +17,12 @@ By running:
 Theo will load the yaml file, parse the tests, and run them. Reporting when
 any of the tests failed.
 
+Also, theo is capable of finding this data in any other type of file. You only
+have to write !theo in any line, and !theo again in another line after the
+first one. Theo will take whatever is inside them, remove the prefix found
+in the !theo line from the lines inbetween, and then create a suite for that
+file. See `standalone.c` in the examples folder to understand it better. You
+run it like with a yaml file:
+
+    theo standalone.c
+

@@ -36,25 +36,34 @@ class Suite(object):
         valgrind = False,
         environment = [],
         volatile = [],
+        setup = [],
     )
     '''A suite represents a set of tests.'''
     def __init__(self, path):
 
         with open(path, 'r') as testfile:
-            content = testfile.read()
+            content = testfile.readlines()
 
         self.configuration = Suite.default_configuration.copy()
         self.tests = list()
+        self.path = path
 
         try:
             self.fromYAML(content)
         except:
-            content = self.searchtheo(path)
-            self.fromYAML(content)
+            try:
+                content = self.search_theo(content)
+                self.fromYAML(content)
+            except Exception as e:
+                raise e
+                raise Exception('This is not a theo file, or does not contain theo data')
+
+        self.statusSetup = Status.NOTRUN
+        self.statusSetdown = Status.NOTRUN
 
     def fromYAML(self, content):
         try:
-            suite = yaml.load(content)
+            suite = yaml.load(''.join(content))
         except yaml.scanner.ScannerError as e:
             raise Exception("Input file is not YAML, error at line %d"%(e.problem_mark.line,))
         if 'configuration' in suite:
@@ -62,9 +71,8 @@ class Suite(object):
         if 'tests' in suite:
             self.parseTests(suite['tests'])
 
-    def searchtheo(self, filename):
+    def search_theo(self, data):
 
-        data = open(filename).readlines()
         start = None
         end = None
 
@@ -89,7 +97,10 @@ class Suite(object):
                     return
                 cropped = line[prevlen:] or '\n'
                 contents += cropped
+
             return contents
+
+        raise Exception('Theo not found in this file')
 
     def parseConfiguration(self, config):
         config['environment'] = readlist(config, 'environment')
@@ -102,13 +113,19 @@ class Suite(object):
 
     def printHeader(self):
         if arguments.output == 'nice':
-            print '\033[7m{0:39} {1:4} {2:4} {3:30}\033[0m'.format('Test name','Test','Valg','Message')
-        else:
-            print 'Running tests...'
+            print u'\u250C', 'Starting', self.path,
+
+    def printAfterHeader(self):
+        if arguments.output == 'nice':
+            if self.statusSetup == Status.ERROR:
+                print "\033[31mFAIL\033[0m",
+            else:
+                print "\033[32mPASS\033[0m",
+            print
 
     def printTest(self, test):
         if arguments.output == 'nice':
-            print '{0:39}'.format(test.config['name']),
+            print u'\u251C\u2500\u2500','{0:39}'.format(test.config['name']),
 
             if test.statusTest == Status.PASS:
                 print "\033[32mPASS\033[0m",
@@ -133,25 +150,44 @@ class Suite(object):
         if arguments.output == 'nice':
             failed = [t for t in self.tests if t.hasFailed()]
 
+            print u'\u2514', 'Ending', self.path,
+
+            if self.statusSetup == Status.ERROR:
+                print
+                print
+                print 'The suite setup failed!'
+                print
+                return
+
+            if self.statusSetdown == Status.ERROR:
+                print "\033[31mFAIL\033[0m",
+            else:
+                print "\033[32mPASS\033[0m",
+            print
+
             if len(failed) == 0:
-                msg = 'All tests completed successfully'
+                msg = 'All clear!'
             else:
                 msg = 'Failed {0} tests of {1}'.format(len(failed), len(self.tests))
-            print '\033[7m{0:^80}\033[0m'.format(msg)
+            print
+            print msg
+            print
 
             for test in failed:
-                print "{0}: {1}".format(test.config['name'], test.failureMessage())
+                print "{0}.{1}: {2}".format(self.path, test.config['name'], test.failureMessage())
 
     def runTests(self):
         '''This method runs the tests in the suite.'''
         self.printHeader()
+        self.setup_suite()
+        self.printAfterHeader()
 
-        for test in self.tests:
-            self.setup()
-            err = test.run()
-            self.setdown()
-
-            self.printTest(test)
+        if self.statusSetup != Status.ERROR:
+            for test in self.tests:
+                self.setup()
+                err = test.run()
+                self.setdown()
+                self.printTest(test)
 
         self.printFooter()
 
@@ -169,6 +205,17 @@ class Suite(object):
                 os.remove(path)
             except:
                 pass
+
+    def setup_suite(self):
+        '''Run the setup commands from the suite.'''
+        if self.configuration['setup']:
+            self.statusSetup = Status.RUNNING
+            for command in readlist(self.configuration, 'setup'):
+                if subprocess.call(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
+                    self.statusSetup = Status.ERROR
+                    return
+            self.statusSetup = Status.PASS
+
 
     def setdown(self):
         '''Clean the environment from a given test.'''
@@ -323,8 +370,11 @@ def main():
     arguments = parser.parse_args()
 
     for file in arguments.theofile:
-        suite = Suite(file)
-        suite.runTests()
+        try:
+            suite = Suite(file)
+            suite.runTests()
+        except:
+            pass
 
 if __name__ == '__main__':
     exit(main())

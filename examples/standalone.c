@@ -8,11 +8,33 @@
  *   - name: ANumberandItself
  *     run: ./standalone 7 7
  *     output: 7
+ *
  *   - name: TwoBigNumbers
  *     run: ./standalone 1394 2414
  *     output: 34
+ *
  *   - name: TwoPrimes
  *     run: ./standalone 23 91
+ *     output: 1
+ *
+ *   - name: Zero
+ *     run: ./standalone 0 0
+ *     output: 0
+ *
+ *   - name: SecondZero
+ *     run: ./standalone 125 0
+ *     output: 125
+ *
+ *   - name: FirstZero
+ *     run: ./standalone 0 125
+ *     output: 125
+ *
+ *   - name: FirstOne
+ *     run: ./standalone 1 99
+ *     output: 1
+ *
+ *   - name: SecondOne
+ *     run: ./standalone 99 1
  *     output: 1
  * !theo
  */
