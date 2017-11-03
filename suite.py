@@ -128,6 +128,7 @@ class Suite(object):
             for command in readlist(self.configuration, 'setup'):
                 if subprocess.call(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE):
                     self.statusSetup = Status.ERROR
+                    dispatcher.put((Event.SuiteSetupFinished, self))
                     return
             self.statusSetup = Status.PASS
         dispatcher.put((Event.SuiteSetupFinished, self))
