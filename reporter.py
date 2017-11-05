@@ -17,8 +17,6 @@ rootdispatcher = RootDispatcher()
 def Dispatcher():
     return rootdispatcher
 
-queues = dict(event=None)
-
 def enum(**named_values):
     return type('Enum', (), named_values)
 
@@ -40,6 +38,9 @@ class Reporter(Thread):
     def __init__(self):
         super(Reporter, self).__init__()
 
+    def stop(self):
+        rootdispatcher.put((Event.Exit, None))
+
     def run(self):
         while True:
             event = rootdispatcher._queue.get()
@@ -49,7 +50,6 @@ class Reporter(Thread):
             self.process_event(name, payload)
 
     def process_event(self, name, payload):
-        handler = None
         try:
             handler = self.__getattribute__('event_' + name)
         except:

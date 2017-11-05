@@ -1,10 +1,9 @@
 #!/usr/bin/python2
 import argparse
 
-from suite import Suite
 from parser import ExceptionInvalidTheoFile
-from reporter import Reporter, NiceReporter, EventsReporter, Event, Dispatcher
-
+from reporter import NiceReporter, EventsReporter
+from suite import Suite
 
 def main():
     parser = argparse.ArgumentParser()
@@ -17,8 +16,11 @@ def main():
 
     arguments = parser.parse_args()
 
-    reporter = NiceReporter()
-    dispatcher = Dispatcher()
+    if arguments.output == 'nice':
+        reporter = NiceReporter()
+    else:
+        reporter = EventsReporter()
+
     reporter.start()
 
     for file in arguments.theofile:
@@ -28,7 +30,7 @@ def main():
         except ExceptionInvalidTheoFile:
             pass
 
-    dispatcher.put((Event.Exit, None))
+    reporter.stop()
     reporter.join()
 
 if __name__ == '__main__':
