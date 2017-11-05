@@ -11,7 +11,6 @@ class RootDispatcher():
     def put(self, event):
         self._queue.put(event)
 
-
 enabled = False
 rootdispatcher = RootDispatcher()
 

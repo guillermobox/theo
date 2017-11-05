@@ -1,9 +1,9 @@
 import os
 import subprocess
-import yaml
 
 from test import Test, Status
 from reporter import Dispatcher, Event
+from parser import ParserYaml
 
 dispatcher = Dispatcher()
 
@@ -15,82 +15,31 @@ def readlist(dict, key):
         ret = [ret]
     return ret
 
-class ExceptionInvalidTheoFile(Exception):
-    pass
-
 class Suite(object):
     '''A suite represents a set of tests.'''
+
     default_configuration = dict(
         valgrind = False,
         environment = [],
         volatile = [],
         setup = [],
     )
-    def __init__(self, path, arguments):
 
-        with open(path, 'r') as testfile:
-            content = testfile.readlines()
-
-        self.arguments = arguments
-        self.configuration = Suite.default_configuration.copy()
-        self.tests = list()
+    def __init__(self, path):
         self.path = path
 
-        content = self.search_theo(content)
+        parser = ParserYaml(path)
+        dictionary = parser.process()
 
-        self.fromYAML(content)
+        self.configuration = Suite.default_configuration.copy()
+        self.configuration.update( dictionary['configuration'] )
+
+        self.tests = []
+        for test in dictionary['tests']:
+            self.tests.append(Test(test, self))
 
         self.statusSetup = Status.NOTRUN
         self.statusSetdown = Status.NOTRUN
-
-    def fromYAML(self, content):
-        try:
-            suite = yaml.load(content)
-        except:
-            raise ExceptionInvalidTheoFile()
-        if 'configuration' in suite:
-            self.parseConfiguration(suite['configuration'])
-        if 'tests' in suite:
-            self.parseTests(suite['tests'])
-
-    def search_theo(self, data):
-        '''Try to find a !theo block. If not found, get all the file.'''
-        start = None
-        end = None
-
-        for lineno, line in enumerate(data):
-            if '!theo' in line:
-                if start == None:
-                    start = lineno
-                else:
-                    end = lineno
-
-        if start != None and end != None:
-            i = data[start].index('!theo')
-            prev = data[start][0:i]
-            prevlen = len(prev)
-            prev = prev.rstrip()
-
-            contents = ''
-
-            for line in data[start+1:end]:
-                if not line.startswith(prev):
-                    return
-                cropped = line[prevlen:] or '\n'
-                contents += cropped
-
-            return contents
-        else:
-            return ''.join(data)
-
-    def parseConfiguration(self, config):
-        config['environment'] = readlist(config, 'environment')
-        config['volatile'] = readlist(config, 'volatile')
-        self.configuration.update(config)
-
-    def parseTests(self, configlist):
-        for config in configlist:
-            self.tests.append(Test(config, self))
 
     def runTests(self):
         '''This method runs the tests in the suite.'''

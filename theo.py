@@ -1,7 +1,8 @@
 #!/usr/bin/python2
 import argparse
 
-from suite import Suite, ExceptionInvalidTheoFile
+from suite import Suite
+from parser import ExceptionInvalidTheoFile
 from reporter import Reporter, NiceReporter, EventsReporter, Event, Dispatcher
 
 
@@ -22,7 +23,7 @@ def main():
 
     for file in arguments.theofile:
         try:
-            suite = Suite(file, arguments)
+            suite = Suite(file)
             suite.runTests()
         except ExceptionInvalidTheoFile:
             pass
