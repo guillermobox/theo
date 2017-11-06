@@ -13,6 +13,10 @@
  *     run: ./standalone 1394 2414
  *     output: 34
  *
+ *   - name: TwoHugeIntegers
+ *     run: ./standalone 290272158 608635170
+ *     output: 9363618
+ *
  *   - name: TwoPrimes
  *     run: ./standalone 23 91
  *     output: 1
