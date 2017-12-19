@@ -28,3 +28,7 @@ run it like with a yaml file:
     cd examples
     python ../theo.py standalone.c
 
+You can also run theo using a folder as input, and all the theo files in that
+folder will be processed. In this case, the syntax is:
+
+    python ../theo.py .
