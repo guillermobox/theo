@@ -1,5 +1,7 @@
 #!/usr/bin/python2
 import argparse
+import atexit
+import signal
 
 from parser import ExceptionInvalidTheoFile
 from reporter import NiceReporter, EventsReporter
@@ -23,15 +25,26 @@ def main():
 
     reporter.start()
 
-    for file in arguments.theofile:
-        try:
-            suite = Suite(file)
-            suite.runTests()
-        except ExceptionInvalidTheoFile:
-            pass
+    def cleanup(rep):
+        rep.stop()
+        rep.join()
 
-    reporter.stop()
-    reporter.join()
+    def cleanme(*args, **kwargs):
+        cleanup(reporter)
+        exit(1)
+
+    signal.signal(signal.SIGTERM, cleanme)
+    signal.signal(signal.SIGINT, cleanme)
+
+    try:
+        for file in arguments.theofile:
+            try:
+                suite = Suite(file)
+                suite.runTests()
+            except ExceptionInvalidTheoFile:
+                pass
+    finally:
+        cleanup(reporter)
 
 if __name__ == '__main__':
     exit(main())
