@@ -1,11 +1,23 @@
 #!/usr/bin/python2
 import argparse
 import atexit
+import os
 import signal
 
 from parser import ExceptionInvalidTheoFile
 from reporter import NiceReporter, EventsReporter
 from suite import Suite
+
+def expand(path):
+    if os.path.isdir(path):
+        paths = [p for p in os.listdir(path) if not p.startswith('.')]
+        contents = [os.path.join(path, filename) for filename in paths]
+        return filter(os.path.isfile, contents)
+    else:
+        if not path.startswith('.'):
+            return [path]
+        else:
+            return []
 
 def main():
     parser = argparse.ArgumentParser()
@@ -37,7 +49,11 @@ def main():
     signal.signal(signal.SIGINT, cleanme)
 
     try:
+        files = set()
         for file in arguments.theofile:
+            files.update(expand(file))
+
+        for file in files:
             try:
                 suite = Suite(file)
                 suite.runTests()
