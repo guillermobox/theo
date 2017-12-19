@@ -57,13 +57,13 @@ class Suite(object):
     def setup(self):
         '''Prepare the nevironment to a given test.'''
         self.savedEnvironment = dict()
-        for pair in self.configuration['environment']:
+        for pair in readlist(self.configuration,'environment'):
             key,_,value = pair.partition('=')
             if key in os.environ:
                 self.savedEnvironment[key] = os.environ[key]
             os.environ[key] = value
 
-        for path in self.configuration['volatile']:
+        for path in readlist(self.configuration,'volatile'):
             try:
                 os.remove(path)
             except:
@@ -84,14 +84,14 @@ class Suite(object):
 
     def setdown(self):
         '''Clean the environment from a given test.'''
-        for pair in self.configuration['environment']:
+        for pair in readlist(self.configuration,'environment'):
             key,_,value = pair.partition('=')
             if key in self.savedEnvironment:
                 os.environ[key] = self.savedEnvironment[key]
             else:
                 del os.environ[key]
 
-        for path in self.configuration['volatile']:
+        for path in readlist(self.configuration,'volatile'):
             try:
                 os.remove(path)
             except:
